@@ -55,6 +55,13 @@
     <url type="help">https://github.com/Z-Ray-Entertainment/Facetracker/issues</url>
 
     <releases>
+        <release version="25.3" date="2025-03-24">
+            <description>
+                <ul>
+                    <li>Gnome SDK 48</li>
+                </ul>
+            </description>
+        </release>
         <release version="25.2" date="2025-02-05">
             <description>
                 <ul>
