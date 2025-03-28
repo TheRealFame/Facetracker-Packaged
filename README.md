@@ -30,6 +30,8 @@ Simple wrapper UI for OpenSeeFace's facetracker.
 </a>
 </div>
 
+[Flathub Build Project](https://github.com/flathub/de.z_ray.Facetracker)
+
 ## Development Requirements
 
 - gcc
