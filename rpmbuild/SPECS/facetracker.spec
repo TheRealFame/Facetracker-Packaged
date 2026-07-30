@@ -57,6 +57,7 @@ DESTDIR=%{buildroot} ninja -C builddir install
 %{_datadir}/metainfo/de.z_ray.Facetracker.metainfo.xml
 %{_datadir}/icons/hicolor/scalable/apps/de.z_ray.Facetracker.svg
 %{_datadir}/icons/hicolor/symbolic/apps/de.z_ray.Facetracker-symbolic.svg
+%{_datadir}/locale/*/LC_MESSAGES/facetracker.mo
 %license LICENSE
 %doc README.md
 
