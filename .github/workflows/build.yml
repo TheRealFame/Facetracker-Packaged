@@ -7,9 +7,17 @@ on:
       - '25.*'
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (defaults to tag, or meson.build version)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
+
+env:
+  VERSION: ${{ inputs.version != '' && inputs.version || (github.ref_type == 'tag' && github.ref_name || '') }}
 
 jobs:
   deb:
@@ -17,12 +25,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Clone upstream source
         run: |
-          git clone --depth 1 --branch 25.9 https://github.com/Z-Ray-Entertainment/Facetracker.git facetracker-src
+          git clone https://github.com/Z-Ray-Entertainment/Facetracker.git facetracker-src
+
+      - name: Resolve version
+        run: |
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep -m1 "version:" facetracker-src/meson.build | grep -o '[0-9.]*')
+          fi
+          VERSION=${VERSION#v}
+          echo "Building version $VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          cd facetracker-src && git checkout -q ${VERSION} && cd ..
 
       - name: Install build dependencies
         run: |
@@ -32,6 +48,8 @@ jobs:
       - name: Build Debian package
         run: |
           cp -r debian facetracker-src/
+          sed -i "1s/\(.*\)(\([^)]*\))\(.*\)/\1(${VERSION}-1)\3/" facetracker-src/debian/changelog
+          head -1 facetracker-src/debian/changelog
           cd facetracker-src
           debuild -us -uc -b
 
@@ -41,73 +59,30 @@ jobs:
           name: facetracker-deb
           path: facetracker_*.deb
 
-      - name: Generate release notes
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          echo "# Facetracker $TAG" > release_notes.md
-          echo "" >> release_notes.md
-          echo "Face tracking made easy - graphical interface for OpenSeeFace." >> release_notes.md
-          echo "" >> release_notes.md
-          echo "## Installation" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### AppImage (Universal)" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "chmod +x facetracker-x86_64.AppImage" >> release_notes.md
-          echo "./facetracker-x86_64.AppImage" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### Debian/Ubuntu" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "sudo dpkg -i facetracker_*.deb" >> release_notes.md
-          echo "sudo apt-get install -f" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### RPM (Fedora/RHEL/openSUSE)" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "sudo rpm -i facetracker-*.rpm" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### Pacman (Arch/Manjaro)" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "sudo pacman -U facetracker-*.pkg.tar.zst" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "## Required Dependencies (all formats)" >> release_notes.md
-          echo "- python3, python3-gi, python3-pil, python3-numpy" >> release_notes.md
-          echo "- GTK4, libadwaita" >> release_notes.md
-          echo "- v4l-utils (for webcam detection)" >> release_notes.md
-          echo "- OpenSeeFace facetracker binary (see [upstream](https://github.com/emilianavt/OpenSeeFace))" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "_Generated with AI assistance_" >> release_notes.md
-
-      - name: Release Debian package
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: facetracker_*.deb
-          body_path: release_notes.md
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   appimage:
     name: "AppImage (amd64)"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Clone upstream source
         run: |
-          git clone --depth 1 --branch 25.9 https://github.com/Z-Ray-Entertainment/Facetracker.git facetracker-src
+          git clone https://github.com/Z-Ray-Entertainment/Facetracker.git facetracker-src
+
+      - name: Resolve version
+        run: |
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep -m1 "version:" facetracker-src/meson.build | grep -o '[0-9.]*')
+          fi
+          VERSION=${VERSION#v}
+          echo "Building version $VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          cd facetracker-src && git checkout -q ${VERSION} && cd ..
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget fuse libfuse2 meson ninja-build python3 python3-gi python3-pil python3-numpy pkg-config libglib2.0-dev appstream libgtk-4-dev libadwaita-1-dev gobject-introspection v4l-utils desktop-file-utils gettext
+          sudo apt-get install -y wget file fuse libfuse2 meson ninja-build python3 python3-gi python3-pil python3-numpy pkg-config libglib2.0-dev appstream libgtk-4-dev libadwaita-1-dev gobject-introspection v4l-utils desktop-file-utils gettext
 
       - name: Build facetracker
         run: |
@@ -150,6 +125,8 @@ jobs:
           chmod +x appimagetool
 
       - name: Build AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
         run: |
           ARCH=x86_64 ./appimagetool --no-appstream appdir facetracker-x86_64.AppImage
 
@@ -159,68 +136,25 @@ jobs:
           name: facetracker-appimage
           path: facetracker-x86_64.AppImage
 
-      - name: Generate release notes
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          echo "# Facetracker $TAG" > release_notes.md
-          echo "" >> release_notes.md
-          echo "Face tracking made easy - graphical interface for OpenSeeFace." >> release_notes.md
-          echo "" >> release_notes.md
-          echo "## Installation" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### AppImage (Universal)" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "chmod +x facetracker-x86_64.AppImage" >> release_notes.md
-          echo "./facetracker-x86_64.AppImage" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### Debian/Ubuntu" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "sudo dpkg -i facetracker_*.deb" >> release_notes.md
-          echo "sudo apt-get install -f" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### RPM (Fedora/RHEL/openSUSE)" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "sudo rpm -i facetracker-*.rpm" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### Pacman (Arch/Manjaro)" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "sudo pacman -U facetracker-*.pkg.tar.zst" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "## Required Dependencies (all formats)" >> release_notes.md
-          echo "- python3, python3-gi, python3-pil, python3-numpy" >> release_notes.md
-          echo "- GTK4, libadwaita" >> release_notes.md
-          echo "- v4l-utils (for webcam detection)" >> release_notes.md
-          echo "- OpenSeeFace facetracker binary (see [upstream](https://github.com/emilianavt/OpenSeeFace))" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "_Generated with AI assistance_" >> release_notes.md
-
-      - name: Release AppImage
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: facetracker-x86_64.AppImage
-          body_path: release_notes.md
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   rpm:
     name: "RPM Package (amd64)"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Clone upstream source
         run: |
-          git clone --depth 1 --branch 25.9 https://github.com/Z-Ray-Entertainment/Facetracker.git facetracker-src
+          git clone https://github.com/Z-Ray-Entertainment/Facetracker.git facetracker-src
+
+      - name: Resolve version
+        run: |
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep -m1 "version:" facetracker-src/meson.build | grep -o '[0-9.]*')
+          fi
+          VERSION=${VERSION#v}
+          echo "Building version $VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          cd facetracker-src && git checkout -q ${VERSION} && cd ..
 
       - name: Install build dependencies
         run: |
@@ -230,9 +164,10 @@ jobs:
       - name: Prepare RPM source
         run: |
           mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          cp rpmbuild/SPECS/facetracker.spec ~/rpmbuild/SPECS/
+          sed -E "s/^(Version:).*/\1        ${VERSION}/" rpmbuild/SPECS/facetracker.spec > ~/rpmbuild/SPECS/facetracker.spec
+          grep -E '^Version:' ~/rpmbuild/SPECS/facetracker.spec
           cd facetracker-src
-          git archive --prefix=facetracker-25.9/ --format=tar.gz HEAD > ~/rpmbuild/SOURCES/facetracker-25.9.tar.gz
+          git archive --prefix=facetracker-${VERSION}/ --format=tar.gz HEAD > ~/rpmbuild/SOURCES/facetracker-${VERSION}.tar.gz
 
       - name: Build RPM
         run: |
@@ -248,72 +183,36 @@ jobs:
           name: facetracker-rpm
           path: facetracker-*.rpm
 
-      - name: Generate release notes
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          echo "# Facetracker $TAG" > release_notes.md
-          echo "" >> release_notes.md
-          echo "Face tracking made easy - graphical interface for OpenSeeFace." >> release_notes.md
-          echo "" >> release_notes.md
-          echo "## Installation" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### AppImage (Universal)" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "chmod +x facetracker-x86_64.AppImage" >> release_notes.md
-          echo "./facetracker-x86_64.AppImage" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### Debian/Ubuntu" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "sudo dpkg -i facetracker_*.deb" >> release_notes.md
-          echo "sudo apt-get install -f" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### RPM (Fedora/RHEL/openSUSE)" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "sudo rpm -i facetracker-*.rpm" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### Pacman (Arch/Manjaro)" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "sudo pacman -U facetracker-*.pkg.tar.zst" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "## Required Dependencies (all formats)" >> release_notes.md
-          echo "- python3, python3-gi, python3-pil, python3-numpy" >> release_notes.md
-          echo "- GTK4, libadwaita" >> release_notes.md
-          echo "- v4l-utils (for webcam detection)" >> release_notes.md
-          echo "- OpenSeeFace facetracker binary (see [upstream](https://github.com/emilianavt/OpenSeeFace))" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "_Generated with AI assistance_" >> release_notes.md
-
-      - name: Release RPM
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: facetracker-*.rpm
-          body_path: release_notes.md
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   pacman:
     name: "Pacman Package (amd64)"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
+      - name: Clone upstream source
+        run: |
+          git clone https://github.com/Z-Ray-Entertainment/Facetracker.git facetracker-src
+
+      - name: Resolve version
+        run: |
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep -m1 "version:" facetracker-src/meson.build | grep -o '[0-9.]*')
+          fi
+          VERSION=${VERSION#v}
+          echo "Building version $VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
       - name: Build Pacman package in Arch Linux container
         run: |
-          docker run --rm -v "${{ github.workspace }}":/work archlinux/archlinux:latest bash -c "
-            pacman -Syu --noconfirm base-devel
+          docker run --rm -v "${{ github.workspace }}":/work -e VERSION="${VERSION}" archlinux/archlinux:latest bash -c "
+            pacman -Syu --noconfirm base-devel sudo
+            useradd -m builduser
+            echo 'builduser ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
             cd /work
             cat > PKGBUILD << 'PKGBUILD_EOF'
             # Maintainer: Z-Ray Entertainment Packaging <packaging@z-ray.de>
             pkgname=facetracker
-            pkgver=25.9
+            pkgver=\${VERSION}
             pkgrel=1
             pkgdesc=\"Face tracking made easy - graphical interface for OpenSeeFace\"
             arch=('x86_64')
@@ -321,7 +220,7 @@ jobs:
             license=('MIT')
             depends=('python' 'python-gobject' 'gtk4' 'libadwaita' 'python-pillow' 'python-numpy' 'v4l-utils')
             makedepends=('meson' 'ninja')
-            source=(\"https://github.com/Z-Ray-Entertainment/Facetracker/archive/v\${pkgver}.tar.gz\")
+            source=(\"https://github.com/Z-Ray-Entertainment/Facetracker/archive/\${pkgver}.tar.gz\")
             sha256sums=('SKIP')
 
             build() {
@@ -336,7 +235,7 @@ jobs:
             }
             PKGBUILD_EOF
             chown -R builduser:builduser .
-            su builduser -c 'makepkg -f --noconfirm --skippgpcheck'
+            su builduser -c 'makepkg -f --syncdeps --noconfirm --skippgpcheck'
           "
 
       - name: Upload Pacman artifact
@@ -345,8 +244,19 @@ jobs:
           name: facetracker-pacman
           path: facetracker-*.pkg.tar.zst
 
+  release:
+    name: "Create Release"
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [deb, appimage, rpm, pacman]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
       - name: Generate release notes
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
           TAG=${GITHUB_REF#refs/tags/}
           echo "# Facetracker $TAG" > release_notes.md
@@ -385,11 +295,10 @@ jobs:
           echo "" >> release_notes.md
           echo "_Generated with AI assistance_" >> release_notes.md
 
-      - name: Release Pacman package
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: facetracker-*.pkg.tar.zst
+          files: artifacts/*
           body_path: release_notes.md
           draft: false
           prerelease: false
