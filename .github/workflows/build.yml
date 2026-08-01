@@ -188,10 +188,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
       - name: Clone upstream source
         run: |
           git clone https://github.com/Z-Ray-Entertainment/Facetracker.git facetracker-src
+          git -C facetracker-src checkout -q "${VERSION}" 2>/dev/null || git -C facetracker-src checkout -q "v${VERSION}"
+          git -C facetracker-src archive --prefix=facetracker-${VERSION}/ --format=tar.gz HEAD > facetracker-src.tar.gz
 
       - name: Resolve version
         run: |
@@ -202,41 +203,45 @@ jobs:
           echo "Building version $VERSION"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
-      - name: Build Pacman package in Arch Linux container
+      - name: Prepare PKGBUILD
         run: |
-          docker run --rm -v "${{ github.workspace }}":/work -e VERSION="${VERSION}" archlinux/archlinux:latest bash -c "
-            pacman -Syu --noconfirm base-devel sudo
-            useradd -m builduser
-            echo 'builduser ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
-            cd /work
-            cat > PKGBUILD << 'PKGBUILD_EOF'
-            # Maintainer: Z-Ray Entertainment Packaging <packaging@z-ray.de>
-            pkgname=facetracker
-            pkgver=\${VERSION}
-            pkgrel=1
-            pkgdesc=\"Face tracking made easy - graphical interface for OpenSeeFace\"
-            arch=('x86_64')
-            url=\"https://codeberg.org/ZRayEntertainment/Facetracker\"
-            license=('MIT')
-            depends=('python' 'python-gobject' 'gtk4' 'libadwaita' 'python-pillow' 'python-numpy' 'v4l-utils')
-            makedepends=('meson' 'ninja')
-            source=(\"https://github.com/Z-Ray-Entertainment/Facetracker/archive/\${pkgver}.tar.gz\")
-            sha256sums=('SKIP')
+          cat > PKGBUILD << PKGBUILD_EOF
+          # Maintainer: TheRealFame <packaging>
+          pkgname=facetracker
+          pkgver=${VERSION}
+          pkgrel=1
+          pkgdesc="Face tracking made easy - graphical interface for OpenSeeFace"
+          arch=('x86_64')
+          url="https://codeberg.org/ZRayEntertainment/Facetracker"
+          license=('MIT')
+          depends=('python' 'python-gobject' 'gtk4' 'libadwaita' 'python-pillow' 'python-numpy' 'v4l-utils')
+          makedepends=('meson' 'ninja')
+          source=("facetracker-src.tar.gz")
+          sha256sums=('SKIP')
 
-            build() {
-              cd \"\${srcdir}/\${pkgname}-\${pkgver}\"
+          build() {
+            cd "${srcdir}/facetracker-${pkgver}"
               meson setup builddir --prefix=/usr
               ninja -C builddir
-            }
+          }
 
-            package() {
-              cd \"\${srcdir}/\${pkgname}-\${pkgver}\"
-              DESTDIR=\"\${pkgdir}\" ninja -C builddir install
-            }
-            PKGBUILD_EOF
+          package() {
+            cd "${srcdir}/facetracker-${pkgver}"
+              DESTDIR="${pkgdir}" ninja -C builddir install
+          }
+          PKGBUILD_EOF
+
+      - name: Build Pacman package in Arch Linux container
+        run: |
+          docker run --rm -v "${{ github.workspace }}":/work archlinux/archlinux:latest bash -c '
+            set -ex
+            pacman -Syu --noconfirm base-devel sudo
+            useradd -m builduser
+            echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+            cd /work
             chown -R builduser:builduser .
-            su builduser -c 'makepkg -f --syncdeps --noconfirm --skippgpcheck'
-          "
+            su builduser -c "makepkg -f --syncdeps --noconfirm --skippgpcheck"
+          '
 
       - name: Upload Pacman artifact
         uses: actions/upload-artifact@v4
