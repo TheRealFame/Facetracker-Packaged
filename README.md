@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # OpenSeeFace Facetracking Wrapper
 
 <div style="text-align: center;">
@@ -83,3 +84,72 @@ The following cams have been tested with this application in functioning and gat
 - Logitec HD WebCam C270
 - pulsonic HDR webcam
 - Integrated Camera of Lenovo V15 G4 AMN
+
+---
+
+# Facetracker-Packaged
+
+Linux packaging for [Facetracker](https://github.com/Z-Ray-Entertainment/Facetracker) — a graphical user interface for OpenSeeFace that turns webcam input into face tracking data, useful for VTubbing and other avatar-driven applications.
+
+Built and published automatically via GitHub Actions.
+
+## Available formats
+
+| Format | File | Use case |
+|---|---|---|
+| AppImage | `facetracker-x86_64.AppImage` | Universal (any distro, no install) |
+| Debian | `facetracker_*_amd64.deb` | Debian, Ubuntu, Pop!_OS, Mint |
+| RPM | `facetracker-*.x86_64.rpm` | Fedora, RHEL, openSUSE |
+| Pacman | `facetracker-*.pkg.tar.zst` | Arch, Manjaro, EndeavourOS |
+
+## Installation
+
+### AppImage
+
+```bash
+chmod +x facetracker-x86_64.AppImage
+./facetracker-x86_64.AppImage
+```
+
+### Debian / Ubuntu
+
+```bash
+sudo dpkg -i facetracker_*_amd64.deb
+sudo apt-get install -f
+```
+
+### RPM
+
+```bash
+sudo rpm -i facetracker-*.x86_64.rpm
+```
+
+### Pacman
+
+```bash
+sudo pacman -U facetracker-*.pkg.tar.zst
+```
+
+## Required system dependencies
+
+These are not bundled and must be installed via the system package manager:
+
+- `python3`, `python3-gi`, `python3-pil`, `python3-numpy`
+- `gtk4`, `libadwaita`
+- `v4l-utils` (for webcam detection)
+
+### OpenSeeFace
+
+Facetracker is a UI for [OpenSeeFace](https://github.com/emilianavt/OpenSeeFace). You need the OpenSeeFace tracker installed separately — Facetracker will look for the `facetracker` binary on `PATH` (or under the `osf/` subdirectory if running from source).
+
+## Upstream
+
+- Repository: <https://github.com/Z-Ray-Entertainment/Facetracker>
+- Upstream mirror: <https://codeberg.org/ZRayEntertainment/Facetracker>
+- License: MIT
+
+## License of the packaging files
+
+The packaging files in this repository are provided under the MIT license (matching upstream).
+
+_Generated with AI assistance_
