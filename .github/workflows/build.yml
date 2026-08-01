@@ -191,17 +191,26 @@ jobs:
       - name: Clone upstream source
         run: |
           git clone https://github.com/Z-Ray-Entertainment/Facetracker.git facetracker-src
-          git -C facetracker-src checkout -q "${VERSION}" 2>/dev/null || git -C facetracker-src checkout -q "v${VERSION}"
-          git -C facetracker-src archive --prefix=facetracker-${VERSION}/ --format=tar.gz HEAD > facetracker-src.tar.gz
 
       - name: Resolve version
         run: |
           if [ -z "$VERSION" ]; then
-            VERSION=$(grep -m1 "version:" facetracker-src/meson.build | grep -o '[0-9.]*')
+            VERSION=$(grep -m1 "version:" facetracker-src/meson.build | grep -o '[0-9.]*' 2>/dev/null)
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep -m1 '^version' facetracker-src/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep -m1 '^  VERSION' facetracker-src/CMakeLists.txt | grep -o '[0-9.]*')
           fi
           VERSION=${VERSION#v}
           echo "Building version $VERSION"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Checkout version and create source tarball
+        run: |
+          git -C facetracker-src checkout -q "${VERSION}" 2>/dev/null || git -C facetracker-src checkout -q "v${VERSION}"
+          git -C facetracker-src archive --prefix=facetracker-${VERSION}/ --format=tar.gz HEAD > facetracker-src.tar.gz
 
       - name: Prepare PKGBUILD
         run: |
@@ -220,14 +229,13 @@ jobs:
           sha256sums=('SKIP')
 
           build() {
-            cd "${srcdir}/facetracker-${pkgver}"
-              meson setup builddir --prefix=/usr
-              ninja -C builddir
+            cd "\${srcdir}/facetracker-\${pkgver}"
+            meson setup builddir --prefix=/usr && ninja -C builddir
           }
 
           package() {
-            cd "${srcdir}/facetracker-${pkgver}"
-              DESTDIR="${pkgdir}" ninja -C builddir install
+            cd "\${srcdir}/facetracker-\${pkgver}"
+            DESTDIR="\${pkgdir}" ninja -C builddir install
           }
           PKGBUILD_EOF
 
